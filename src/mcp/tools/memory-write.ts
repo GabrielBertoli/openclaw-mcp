@@ -9,47 +9,30 @@ export const openclawMemoryWriteTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: {
-        type: 'string',
-        description: 'Relative path to the file in the workspace (e.g. "memory/tasks.md")',
-      },
-      content: {
-        type: 'string',
-        description: 'Content to write to the file',
-      },
+      path: { type: 'string', description: 'Relative path to the file in the workspace (e.g. "memory/tasks.md")' },
+      content: { type: 'string', description: 'Content to write to the file' },
     },
     required: ['path', 'content'],
   },
 };
 
-export async function handleOpenclawMemoryWrite(
-  client: OpenClawClient,
-  input: unknown
-): Promise<ToolResponse> {
-  if (!validateInputIsObject(input)) {
-    return errorResponse('Invalid input: expected an object');
-  }
+export async function handleOpenclawMemoryWrite(client: OpenClawClient, input: unknown): Promise<ToolResponse> {
+  if (!validateInputIsObject(input)) return errorResponse('Invalid input: expected an object');
 
-  const pathResult = validateString(input.path, 'path', 512);
-  if (pathResult.valid === false) {
-    return errorResponse(pathResult.error);
-  }
+  const pathResult = validateString(input.path, 'path', 1024);
+  if (!pathResult.valid) return errorResponse(pathResult.error);
 
-  if (pathResult.value.includes('..')) {
-    return errorResponse('path must not contain ".." (path traversal)');
+  if (pathResult.value.includes('..') || pathResult.value.startsWith('/')) {
+    return errorResponse('path must be relative and cannot contain ".."');
   }
 
   const contentResult = validateMessage(input.content);
-  if (contentResult.valid === false) {
-    return errorResponse(contentResult.error);
-  }
+  if (!contentResult.valid) return errorResponse(contentResult.error);
 
   try {
-    const response = await client.chat(
-      `Write the following content to ${pathResult.value}: ${contentResult.value}`
-    );
-    return successResponse(response.response);
+    await client.writeFile(pathResult.value, contentResult.value);
+    return successResponse(`File written: ${pathResult.value}`);
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Failed to write memory file');
+    return errorResponse(error instanceof Error ? error.message : 'Failed to write file');
   }
 }

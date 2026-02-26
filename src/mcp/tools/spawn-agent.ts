@@ -9,55 +9,33 @@ export const openclawSpawnAgentTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      agent_id: {
-        type: 'string',
-        description: 'Agent identifier to spawn',
-      },
-      task: {
-        type: 'string',
-        description: 'Task description for the agent',
-      },
-      model: {
-        type: 'string',
-        description: 'Optional model override for the agent',
-      },
+      agent_id: { type: 'string', description: 'Agent identifier to spawn (e.g. "main", "dev")' },
+      task: { type: 'string', description: 'Task description for the agent' },
+      model: { type: 'string', description: 'Optional model override for the agent' },
     },
     required: ['agent_id', 'task'],
   },
 };
 
-export async function handleOpenclawSpawnAgent(
-  client: OpenClawClient,
-  input: unknown
-): Promise<ToolResponse> {
-  if (!validateInputIsObject(input)) {
-    return errorResponse('Invalid input: expected an object');
-  }
+export async function handleOpenclawSpawnAgent(client: OpenClawClient, input: unknown): Promise<ToolResponse> {
+  if (!validateInputIsObject(input)) return errorResponse('Invalid input: expected an object');
 
-  const agentIdResult = validateString(input.agent_id, 'agent_id', 256);
-  if (agentIdResult.valid === false) {
-    return errorResponse(agentIdResult.error);
-  }
+  const agentResult = validateString(input.agent_id, 'agent_id', 64);
+  if (!agentResult.valid) return errorResponse(agentResult.error);
 
   const taskResult = validateMessage(input.task);
-  if (taskResult.valid === false) {
-    return errorResponse(taskResult.error);
-  }
+  if (!taskResult.valid) return errorResponse(taskResult.error);
 
-  let modelStr = '';
+  let model: string | undefined;
   if (input.model !== undefined) {
     const modelResult = validateString(input.model, 'model', 128);
-    if (modelResult.valid === false) {
-      return errorResponse(modelResult.error);
-    }
-    modelStr = `, model=${modelResult.value}`;
+    if (!modelResult.valid) return errorResponse(modelResult.error);
+    model = modelResult.value;
   }
 
-  const prompt = `Spawn a sub-agent with agentId=${agentIdResult.value}${modelStr}, task=${taskResult.value}`;
-
   try {
-    const response = await client.chat(prompt);
-    return successResponse(response.response);
+    const result = await client.spawnAgent(agentResult.value, taskResult.value, model);
+    return successResponse(result);
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Failed to spawn agent');
   }

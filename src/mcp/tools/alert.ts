@@ -9,55 +9,30 @@ export const openclawAlertTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      level: {
-        type: 'string',
-        enum: ['info', 'warning', 'critical'],
-        description: 'Alert severity level',
-      },
-      title: {
-        type: 'string',
-        description: 'Short alert title',
-      },
-      details: {
-        type: 'string',
-        description: 'Detailed alert information',
-      },
+      level: { type: 'string', enum: ['info', 'warning', 'critical'], description: 'Alert severity level' },
+      title: { type: 'string', description: 'Short alert title' },
+      details: { type: 'string', description: 'Detailed alert information' },
     },
     required: ['level', 'title', 'details'],
   },
 };
 
-export async function handleOpenclawAlert(
-  client: OpenClawClient,
-  input: unknown
-): Promise<ToolResponse> {
-  if (!validateInputIsObject(input)) {
-    return errorResponse('Invalid input: expected an object');
-  }
+export async function handleOpenclawAlert(client: OpenClawClient, input: unknown): Promise<ToolResponse> {
+  if (!validateInputIsObject(input)) return errorResponse('Invalid input: expected an object');
 
   const levelResult = validateString(input.level, 'level', 20);
-  if (levelResult.valid === false) {
-    return errorResponse(levelResult.error);
-  }
-  if (!['info', 'warning', 'critical'].includes(levelResult.value)) {
-    return errorResponse('level must be "info", "warning", or "critical"');
-  }
+  if (!levelResult.valid) return errorResponse(levelResult.error);
+  if (!['info', 'warning', 'critical'].includes(levelResult.value)) return errorResponse('level must be info, warning, or critical');
 
   const titleResult = validateString(input.title, 'title', 256);
-  if (titleResult.valid === false) {
-    return errorResponse(titleResult.error);
-  }
+  if (!titleResult.valid) return errorResponse(titleResult.error);
 
   const detailsResult = validateMessage(input.details);
-  if (detailsResult.valid === false) {
-    return errorResponse(detailsResult.error);
-  }
-
-  const prompt = `[ALERT ${levelResult.value.toUpperCase()}] ${titleResult.value}: ${detailsResult.value}. Send this to Gabriel on Telegram immediately.`;
+  if (!detailsResult.valid) return errorResponse(detailsResult.error);
 
   try {
-    const response = await client.chat(prompt);
-    return successResponse(response.response);
+    await client.sendAlert(levelResult.value, titleResult.value, detailsResult.value);
+    return successResponse(`Alert [${levelResult.value.toUpperCase()}] sent: ${titleResult.value}`);
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Failed to send alert');
   }

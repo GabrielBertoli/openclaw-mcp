@@ -9,34 +9,22 @@ export const openclawWebSearchTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      query: {
-        type: 'string',
-        description: 'Search query string',
-      },
+      query: { type: 'string', description: 'Search query string' },
     },
     required: ['query'],
   },
 };
 
-export async function handleOpenclawWebSearch(
-  client: OpenClawClient,
-  input: unknown
-): Promise<ToolResponse> {
-  if (!validateInputIsObject(input)) {
-    return errorResponse('Invalid input: expected an object');
-  }
+export async function handleOpenclawWebSearch(client: OpenClawClient, input: unknown): Promise<ToolResponse> {
+  if (!validateInputIsObject(input)) return errorResponse('Invalid input: expected an object');
 
   const queryResult = validateMessage(input.query);
-  if (queryResult.valid === false) {
-    return errorResponse(queryResult.error);
-  }
+  if (!queryResult.valid) return errorResponse(queryResult.error);
 
   try {
-    const response = await client.chat(
-      `Search the web for: ${queryResult.value}. Return the results.`
-    );
-    return successResponse(response.response);
+    const result = await client.webSearch(queryResult.value);
+    return successResponse(result);
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Failed to search the web');
+    return errorResponse(error instanceof Error ? error.message : 'Web search failed');
   }
 }

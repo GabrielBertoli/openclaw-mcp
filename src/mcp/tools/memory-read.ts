@@ -9,39 +9,32 @@ export const openclawMemoryReadTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: {
-        type: 'string',
-        description: 'Relative path to the file in the workspace (e.g. "memory/tasks.md")',
-      },
+      path: { type: 'string', description: 'Relative path to the file in the workspace (e.g. "memory/tasks.md")' },
     },
     required: ['path'],
   },
 };
 
-export async function handleOpenclawMemoryRead(
-  client: OpenClawClient,
-  input: unknown
-): Promise<ToolResponse> {
-  if (!validateInputIsObject(input)) {
-    return errorResponse('Invalid input: expected an object');
-  }
+export async function handleOpenclawMemoryRead(client: OpenClawClient, input: unknown): Promise<ToolResponse> {
+  if (!validateInputIsObject(input)) return errorResponse('Invalid input: expected an object');
 
-  const pathResult = validateString(input.path, 'path', 512);
-  if (pathResult.valid === false) {
-    return errorResponse(pathResult.error);
-  }
+  const pathResult = validateString(input.path, 'path', 1024);
+  if (!pathResult.valid) return errorResponse(pathResult.error);
 
-  // Reject path traversal attempts
-  if (pathResult.value.includes('..')) {
-    return errorResponse('path must not contain ".." (path traversal)');
+  // Security: prevent path traversal
+  if (pathResult.value.includes('..') || pathResult.value.startsWith('/')) {
+    return errorResponse('path must be relative and cannot contain ".."');
   }
 
   try {
-    const response = await client.chat(
-      `Read the file ${pathResult.value} and return its contents verbatim.`
-    );
-    return successResponse(response.response);
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const workspace = process.env.OPENCLAW_WORKSPACE ??
+      (process.env.HOME ?? '/Users/openclawbot') + '/.openclaw/workspace';
+    const fullPath = join(workspace, pathResult.value);
+    const content = readFileSync(fullPath, 'utf8');
+    return successResponse(content);
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Failed to read memory file');
+    return errorResponse(error instanceof Error ? error.message : 'Failed to read file');
   }
 }
